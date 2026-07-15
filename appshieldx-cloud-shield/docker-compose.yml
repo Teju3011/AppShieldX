@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  # 1. The Threat Telemetry Ingestion Service
+  threat-service:
+    image: mockoon/cli:latest
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./threat-service:/data
+    command: ["-d", "https://raw.githubusercontent.com/mockoon/mock-samples/main/samples/petstore.json", "-p", "8081"]
+
+  # 2. The Spring Cloud Gateway Mediator Bypass
+  api-gateway:
+    image: mockoon/cli:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./api-gateway:/data
+    command: ["-d", "https://raw.githubusercontent.com/mockoon/mock-samples/main/samples/petstore.json", "-p", "8080"]
