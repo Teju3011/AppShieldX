@@ -1,10 +1,13 @@
 package com.universalapp.androidcore.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import com.universalapp.androidcore.model.ThreatTelemetry
+import com.universalapp.androidcore.data.TelemetryDispatcher
 import java.io.File
 
 class MainViewModel : ViewModel() {
@@ -15,7 +18,6 @@ class MainViewModel : ViewModel() {
     fun runSecurityAssessment() {
         _securityState.value = "Analyzing environment status..."
         
-        // Basic static verification indicators for the device architecture environment
         val isRooted = checkRootFiles()
         val isEmulator = android.os.Build.FINGERPRINT.contains("generic") || android.os.Build.MODEL.contains("google_sdk")
         
@@ -27,26 +29,30 @@ class MainViewModel : ViewModel() {
             integrityStatus = if (isRooted) "COMPROMISED" else "SECURE"
         )
         
-        _securityState.value = """
-            Scan Complete!
-            Status: ${telemetry.integrityStatus}
-            Root Detected: ${telemetry.isRooted}
-            Is Emulator: ${telemetry.isEmulator}
-        """.trimIndent()
+        // Launch a coroutine to push telemetry off the main UI thread
+        viewModelScope.launch {
+            _securityState.value = "Transmitting metrics to secure gateway..."
+            val networkResult = TelemetryDispatcher.sendTelemetry(telemetry)
+            
+            networkResult.onSuccess { code ->
+                _securityState.value = """
+                    Scan Transmitted! (HTTP $code)
+                    Status: ${telemetry.integrityStatus}
+                    Root Detected: ${telemetry.isRooted}
+                    Is Emulator: ${telemetry.isEmulator}
+                """.trimIndent()
+            }.onFailure { error ->
+                _securityState.value = """
+                    Scan Cached. Gateway Offline.
+                    Reason: ${error.localizedMessage}
+                    Status: ${telemetry.integrityStatus}
+                """.trimIndent()
+            }
+        }
     }
 
     private fun checkRootFiles(): Boolean {
-        val paths = arrayOf(
-            "/system/app/Superuser.apk",
-            "/sbin/su",
-            "/system/bin/su",
-            "/system/xbin/su",
-            "/data/local/xbin/su",
-            "/data/local/bin/su",
-            "/system/sd/xbin/su",
-            "/system/bin/failsafe/su",
-            "/data/local/su"
-        )
+        val paths = arrayOf("/system/app/Superuser.apk", "/sbin/su", "/system/bin/su", "/system/xbin/su")
         for (path in paths) {
             if (File(path).exists()) return true
         }
