@@ -1,0 +1,37 @@
+{
+  "source": "mockoon:cli",
+  "data": [
+    {
+      "type": "environment",
+      "item": {
+        "name": "AppShieldX Core Gateway",
+        "port": 8080,
+        "hostname": "0.0.0.0",
+        "routes": [
+          {
+            "method": "post",
+            "endpoint": "v1/telemetry",
+            "responses": [
+              {
+                "statusCode": 200,
+                "body": "{\n  \"status\": \"SUCCESS\",\n  \"message\": \"Telemetry ingestion accepted.\"\n}",
+                "headers": [{ "key": "Content-Type", "value": "application/json" }]
+              }
+            ]
+          },
+          {
+            "method": "get",
+            "endpoint": "v1/status",
+            "responses": [
+              {
+                "statusCode": 200,
+                "body": "{\n  \"gateway\": \"ONLINE\",\n  \"serviceMesh\": \"ACTIVE\"\n}",
+                "headers": [{ "key": "Content-Type", "value": "application/json" }]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,20 +1,48 @@
 version: '3.8'
 
 services:
-  # 1. The Threat Telemetry Ingestion Service
+  # 1. The Threat Telemetry Ingestion Service (Direct Mock)
   threat-service:
     image: mockoon/cli:latest
     ports:
       - "8081:8081"
-    volumes:
-      - ./threat-service:/data
-    command: ["-d", "https://raw.githubusercontent.com/mockoon/mock-samples/main/samples/petstore.json", "-p", "8081"]
+    command: ["-d", "https://raw.githubusercontent.com/mockoon/mock-samples/main/samples/petstore.json", "-p", "8081", "-l", "0.0.0.0"]
 
-  # 2. The Spring Cloud Gateway Mediator Bypass
+  # 2. The API Gateway - Programmatic Zero-Mount Node Server
   api-gateway:
-    image: mockoon/cli:latest
+    image: node:18-alpine
     ports:
       - "8080:8080"
-    volumes:
-      - ./api-gateway:/data
-    command: ["-d", "https://raw.githubusercontent.com/mockoon/mock-samples/main/samples/petstore.json", "-p", "8080"]
+    command: >
+      node -e "
+      const http = require('http');
+      const server = http.createServer((req, res) => {
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        
+        if (req.method === 'OPTIONS') {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
+        
+        if (req.url === '/v1/status' && req.method === 'GET') {
+          res.writeHead(200);
+          res.end(JSON.stringify({ gateway: 'ONLINE', serviceMesh: 'ACTIVE' }));
+        } else if (req.url === '/v1/telemetry' && req.method === 'POST') {
+          let body = '';
+          req.on('data', chunk => body += chunk);
+          req.on('end', () => {
+            console.log('Received RASP Telemetry Payload:', body);
+            res.writeHead(200);
+            res.end(JSON.stringify({ status: 'SUCCESS', message: 'Telemetry ingestion accepted.' }));
+          });
+        } else {
+          res.writeHead(404);
+          res.end(JSON.stringify({ error: 'Route not found' }));
+        }
+      });
+      server.listen(8080, '0.0.0.0', () => console.log('Zero-Mount API Gateway active on port 8080'));
+      "
