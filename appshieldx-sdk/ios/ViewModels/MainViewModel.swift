@@ -4,9 +4,10 @@ class MainViewModel: ObservableObject {
     @Published var securityState: String = "System Initialized. Awaiting Scan..."
     
     func runSecurityAssessment() {
-        self.securityState = "Analyzing environment status..."
+        DispatchQueue.main.async {
+            self.securityState = "Analyzing environment status..."
+        }
         
-        // Check for common jailbreak directory hooks
         let isJailbroken = FileManager.default.fileExists(atPath: "/Applications/Cydia.app") || 
                            FileManager.default.fileExists(atPath: "/private/var/lib/apt")
         
@@ -24,11 +25,28 @@ class MainViewModel: ObservableObject {
             integrityStatus: isJailbroken ? "COMPROMISED" : "SECURE"
         )
         
-        self.securityState = """
-        Scan Complete!
-        Status: \(telemetry.integrityStatus)
-        Jailbreak Detected: \(telemetry.isRooted)
-        Is Simulator: \(telemetry.isEmulator)
-        """
+        DispatchQueue.main.async {
+            self.securityState = "Transmitting metrics to secure gateway..."
+        }
+        
+        TelemetryDispatcher.sendTelemetry(telemetry: telemetry) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let code):
+                    self.securityState = """
+                    Scan Transmitted! (HTTP \(code))
+                    Status: \(telemetry.integrityStatus)
+                    Jailbreak Detected: \(telemetry.isRooted)
+                    Is Simulator: \(telemetry.isEmulator)
+                    """
+                case .failure(let error):
+                    self.securityState = """
+                    Scan Cached. Gateway Offline.
+                    Reason: \(error.localizedDescription)
+                    Status: \(telemetry.integrityStatus)
+                    """
+                }
+            }
+        }
     }
 }
