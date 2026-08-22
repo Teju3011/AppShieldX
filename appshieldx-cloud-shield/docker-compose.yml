@@ -8,7 +8,7 @@ services:
       - "8081:8081"
     command: ["-d", "https://raw.githubusercontent.com/mockoon/mock-samples/main/samples/petstore.json", "-p", "8081", "-l", "0.0.0.0"]
 
-  # 2. The API Gateway - Programmatic Zero-Mount Node Server
+  # 2. The API Gateway - Programmatic Zero-Mount Node Server with Native JWT Processing
   api-gateway:
     image: node:18-alpine
     ports:
@@ -16,11 +16,14 @@ services:
     command: >
       node -e "
       const http = require('http');
+      const crypto = require('crypto');
+      const JWT_SECRET = 'appshieldx_super_secure_secret_key_2026';
+
       const server = http.createServer((req, res) => {
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
         
         if (req.method === 'OPTIONS') {
           res.writeHead(204);
@@ -28,21 +31,79 @@ services:
           return;
         }
         
+        // 1. Health Monitoring
         if (req.url === '/v1/status' && req.method === 'GET') {
           res.writeHead(200);
           res.end(JSON.stringify({ gateway: 'ONLINE', serviceMesh: 'ACTIVE' }));
-        } else if (req.url === '/v1/telemetry' && req.method === 'POST') {
+        } 
+        
+        // 2. Authentication Route: Issues signed JWT
+        else if (req.url === '/v1/auth/login' && req.method === 'POST') {
           let body = '';
           req.on('data', chunk => body += chunk);
           req.on('end', () => {
-            console.log('Received RASP Telemetry Payload:', body);
+            try {
+              const parsed = JSON.parse(body || '{}');
+              const deviceId = parsed.deviceId || 'UNKNOWN_DEVICE';
+              
+              // Base64Url encode utility helper functions
+              const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
+              const header = b64({ alg: 'HS256', typ: 'JWT' });
+              const payload = b64({ deviceId: deviceId, exp: Math.floor(Date.now() / 1000) + 3600 });
+              
+              const signature = crypto.createHmac('sha256', JWT_SECRET).update(header + '.' + payload).digest('base64url');
+              const token = header + '.' + payload + '.' + signature;
+              
+              console.log('[Auth] Generated Access Token for Device:', deviceId);
+              res.writeHead(200);
+              res.end(JSON.stringify({ accessToken: token }));
+            } catch (e) {
+              res.writeHead(400);
+              res.end(JSON.stringify({ error: 'Malformed payload data context' }));
+            }
+          });
+        } 
+        
+        // 3. Protected Telemetry Route: Verifies Authorization header
+        else if (req.url === '/v1/telemetry' && req.method === 'POST') {
+          const auth = req.headers['authorization'];
+          if (!auth || !auth.startsWith('Bearer ')) {
+            console.warn('[Gateway Warning] Missing or Invalid Token Format intercept');
+            res.writeHead(401);
+            res.end(JSON.stringify({ error: 'Unauthorized: Missing valid Authorization token header' }));
+            return;
+          }
+          
+          const token = auth.split(' ')[1];
+          const parts = token.split('.');
+          if (parts.length !== 3) {
+            res.writeHead(403);
+            res.end(JSON.stringify({ error: 'Forbidden: Malformed JWT segment signature' }));
+            return;
+          }
+          
+          const [header, payload, signature] = parts;
+          const expectedSig = crypto.createHmac('sha256', JWT_SECRET).update(header + '.' + payload).digest('base64url');
+          
+          if (signature !== expectedSig) {
+            console.error('[Gateway Error] Authentication Attempt Rejected: Token Integrity Validation Failed');
+            res.writeHead(403);
+            res.end(JSON.stringify({ error: 'Forbidden: Token cryptographic checksum signature verification failed' }));
+            return;
+          }
+          
+          let body = '';
+          req.on('data', chunk => body += chunk);
+          req.on('end', () => {
+            const clientClaims = JSON.parse(Buffer.from(payload, 'base64url').toString());
+            console.log('[Gateway Success] Authorized RASP Telemetry Ingestion from verified identity:', clientClaims.deviceId);
             res.writeHead(200);
-            res.end(JSON.stringify({ status: 'SUCCESS', message: 'Telemetry ingestion accepted.' }));
+            res.end(JSON.stringify({ status: 'SUCCESS', message: 'Telemetry ingestion authorized and accepted.' }));
           });
         } else {
           res.writeHead(404);
           res.end(JSON.stringify({ error: 'Route not found' }));
         }
       });
-      server.listen(8080, '0.0.0.0', () => console.log('Zero-Mount API Gateway active on port 8080'));
+      server.listen(8080, '0.0.0.0', () => console.log('Zero-Mount API Gateway active on port 8080 with Auth Verification'));
       "
