@@ -10,16 +10,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.universalapp.androidcore.BuildConfig
 import com.universalapp.androidcore.viewmodel.MainViewModel
 
 class MainActivity : ComponentActivity() {
@@ -40,7 +41,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun RAspshieldScreen(viewModel: MainViewModel = viewModel()) {
-    val securityState by viewModel.securityState.collectAsState()
+    val context = LocalContext.current
+    val securityState = viewModel.logOutput.collectAsState().value
 
     // Determine the state of the environment for visual feedback
     val isCompromised = securityState.contains("COMPROMISED") || securityState.contains("true")
@@ -183,7 +185,7 @@ fun RAspshieldScreen(viewModel: MainViewModel = viewModel()) {
 
         // High-Action Interactive Assessment Execution CTA Trigger
         Button(
-            onClick = { viewModel.runSecurityAssessment() },
+            onClick = { viewModel.performScan(context) },
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7AA2F7)),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier
