@@ -17,8 +17,17 @@ import kotlinx.coroutines.launch
 class MainViewModel : ViewModel() {
 
     private val apiService = GatewayApiService()
+
     private val _logOutput = MutableStateFlow("Tap 'Scan Core Parameters' to start...")
     val logOutput: StateFlow<String> = _logOutput
+
+    // Attack Simulation State
+    private val _isSimulatingAttack = MutableStateFlow(false)
+    val isSimulatingAttack: StateFlow<Boolean> = _isSimulatingAttack
+
+    fun toggleAttackSimulation() {
+        _isSimulatingAttack.value = !_isSimulatingAttack.value
+    }
 
     fun performScan(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -41,8 +50,9 @@ class MainViewModel : ViewModel() {
 
             _logOutput.value = "Evaluating Threats & Transmitting Telemetry..."
 
-            // 2. Perform RASP Checks
-            val isHooked = AdvancedTamperDetector.isHookingFrameworkPresent() || AdvancedTamperDetector.isStackTraceHooked()
+            // 2. Perform RASP Checks (Combines real engine with simulation toggle)
+            val realHook = AdvancedTamperDetector.isHookingFrameworkPresent() || AdvancedTamperDetector.isStackTraceHooked()
+            val isHooked = realHook || _isSimulatingAttack.value
             val isIntegrityValid = SecurityIntegrityChecker.verifyAppIntegrity(context)
 
             // 3. Trigger Active Mitigation if Threat Found

@@ -10,12 +10,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.ui.Alignment
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -42,17 +42,14 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun RAspshieldScreen(viewModel: MainViewModel = viewModel()) {
     val context = LocalContext.current
-    val securityState = viewModel.logOutput.collectAsState().value
+    val securityState by viewModel.logOutput.collectAsState()
+    val isSimulating by viewModel.isSimulatingAttack.collectAsState()
 
     // Determine the state of the environment for visual feedback
-    val isCompromised = securityState.contains("COMPROMISED") || securityState.contains("true")
+    val isCompromised = securityState.contains("COMPROMISED") || securityState.contains("THREAT MITIGATED") || securityState.contains("true")
 
-    // 🔒 PERMANENT FIX:
-    // Only lock out the app for UNTRUSTED environments in RELEASE builds (!BuildConfig.DEBUG).
-    // In DEBUG builds, allow developers to use emulators without triggering the ACCESS DENIED screen.
     val rawServerBlocked = securityState.contains("403") || securityState.contains("ENVIRONMENT_UNTRUSTED")
     val isServerBlocked = !BuildConfig.DEBUG && rawServerBlocked
-
     val isOffline = securityState.contains("Offline") || securityState.contains("Initial")
 
     // 🛑 CRITICAL CLIENT-SIDE ENFORCEMENT LOCKOUT WORKFLOW
@@ -60,7 +57,7 @@ fun RAspshieldScreen(viewModel: MainViewModel = viewModel()) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF1A0B0B)) // Dark Crimson background for safety state
+                .background(Color(0xFF1A0B0B))
                 .padding(24.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -83,13 +80,13 @@ fun RAspshieldScreen(viewModel: MainViewModel = viewModel()) {
                 )
             }
         }
-        return // Short-circuits the layout
+        return
     }
 
     val statusColor = when {
-        isCompromised -> Color(0xFFEF5350) // Crimson Red for Danger
-        isOffline -> Color(0xFFFFB74D)     // Amber for Idle/Disconnected
-        else -> Color(0xFF66BB6A)          // Emerald Green for Secured Stack
+        isCompromised -> Color(0xFFEF5350) // Crimson Red for Threat
+        isOffline -> Color(0xFFFFB74D)     // Amber for Idle
+        else -> Color(0xFF66BB6A)          // Emerald Green for Secured
     }
 
     val statusTitle = when {
@@ -101,13 +98,12 @@ fun RAspshieldScreen(viewModel: MainViewModel = viewModel()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0F0F12)) // Deep obsidian theme background
+            .background(Color(0xFF0F0F12))
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(40.dp))
 
-        // Brand Banner Header
         Text(
             text = "AppShieldX Core",
             fontSize = 32.sp,
@@ -119,10 +115,10 @@ fun RAspshieldScreen(viewModel: MainViewModel = viewModel()) {
             text = "Active Runtime Application Self-Protection",
             fontSize = 12.sp,
             color = Color.Gray,
-            modifier = Modifier.padding(top = 4.dp, bottom = 48.dp)
+            modifier = Modifier.padding(top = 4.dp, bottom = 36.dp)
         )
 
-        // Visual Status Shield Circle Indicator
+        // Status Circle Banner
         Card(
             shape = RoundedCornerShape(100.dp),
             colors = CardDefaults.cardColors(containerColor = statusColor.copy(alpha = 0.12f)),
@@ -140,7 +136,7 @@ fun RAspshieldScreen(viewModel: MainViewModel = viewModel()) {
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         Text(
             text = statusTitle,
@@ -150,9 +146,9 @@ fun RAspshieldScreen(viewModel: MainViewModel = viewModel()) {
             letterSpacing = 1.sp
         )
 
-        Spacer(modifier = Modifier.height(40.dp))
+        Spacer(modifier = Modifier.height(28.dp))
 
-        // Detailed Metrics Telemetry Terminal Box
+        // Logs Output Box
         Text(
             text = "DEVICE METRICS TELEMETRY LOGS",
             fontSize = 11.sp,
@@ -172,18 +168,39 @@ fun RAspshieldScreen(viewModel: MainViewModel = viewModel()) {
         ) {
             Text(
                 text = securityState,
-                color = Color(0xFFC0CAF5), // Clean developer monospace typography tone
+                color = Color(0xFFC0CAF5),
                 fontSize = 14.sp,
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                fontFamily = FontFamily.Monospace,
                 lineHeight = 22.sp,
                 textAlign = TextAlign.Start,
                 modifier = Modifier.fillMaxSize()
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // High-Action Interactive Assessment Execution CTA Trigger
+        // Attack Simulator Toggle Button
+        Button(
+            onClick = { viewModel.toggleAttackSimulation() },
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (isSimulating) Color(0xFFD32F2F) else Color(0xFF2A2A3A)
+            ),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+        ) {
+            Text(
+                text = if (isSimulating) "🔥 SIMULATING FRIDA HOOK (ACTIVE)" else "⚡ SIMULATE FRIDA HOOK ATTACK",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isSimulating) Color.White else Color(0xFFE0E0E0)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Perform Scan Action Button
         Button(
             onClick = { viewModel.performScan(context) },
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7AA2F7)),
@@ -200,6 +217,6 @@ fun RAspshieldScreen(viewModel: MainViewModel = viewModel()) {
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
     }
 }
