@@ -1,33 +1,35 @@
 package com.universalapp.androidcore.security
 
-import java.io.File
-
 object AdvancedTamperDetector {
-    fun isHookingFrameworkPresent(): Boolean {
-        val suspiciousPaths = arrayOf(
-            "/system/framework/XposedBridge.jar",
-            "/system/lib/libxposed_art.so",
-            "/data/local/tmp/frida-server",
-            "/data/local/tmp/re.frida.server"
-        )
-        for (path in suspiciousPaths) {
-            if (File(path).exists()) return true
+
+    init {
+        try {
+            System.loadLibrary("native-lib")
+        } catch (e: UnsatisfiedLinkError) {
+            // Native lib fallback handling
         }
-        return false
+    }
+
+    external fun isNativeDebuggerAttached(): Boolean
+
+    fun isHookingFrameworkPresent(): Boolean {
+        val nativeCheck = try {
+            isNativeDebuggerAttached()
+        } catch (e: Exception) {
+            false
+        }
+        return nativeCheck || isStackTraceHooked()
     }
 
     fun isStackTraceHooked(): Boolean {
-        try {
-            throw Exception("Check Trace")
+        return try {
+            throw Exception("RASP Stack Trace Check")
         } catch (e: Exception) {
-            for (element in e.stackTrace) {
-                if (element.className.contains("de.robv.android.xposed") ||
-                    element.className.contains("com.saurik.substrate") ||
-                    element.className.contains("io.frida")) {
-                    return true
-                }
+            e.stackTrace.any { element ->
+                element.className.contains("de.robv.android.xposed") ||
+                        element.className.contains("com.saurik.substrate") ||
+                        element.className.contains("io.frida")
             }
         }
-        return false
     }
 }

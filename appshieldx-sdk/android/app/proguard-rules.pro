@@ -1,9 +1,6 @@
 # Add project specific ProGuard rules here.
 # You can control the set of applied configuration files using the
 # proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
 
 # Preserve Jetpack Compose runtime internals so UI rendering remains intact
 -keepclassmembers class * {
@@ -16,6 +13,19 @@
 -keep class com.universalapp.androidcore.model.ThreatTelemetry {
     <fields>;
 }
+
+# Preserve Native JNI Methods (Crucial for C++ NDK ptrace checks)
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
+
+# Protect RASP Security Package from destructive renaming
+-keep class com.universalapp.androidcore.security.** { *; }
+
+# Preserve Security-Crypto & Network Dependencies
+-keep class androidx.security.crypto.** { *; }
+-dontwarn okhttp3.**
+-dontwarn javax.annotation.**
 
 # Allow full obfuscation, optimization, and class scrambling on ViewModels and core logic
 -optimizationpasses 5
