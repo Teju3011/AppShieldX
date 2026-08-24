@@ -1,21 +1,35 @@
 package com.universalapp.androidcore.data
 
+import okhttp3.CertificatePinner
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 
 class GatewayApiService {
 
-    // 10.0.2.2 points to localhost on your host machine from the Android Emulator
     private val BASE_URL = "http://10.0.2.2:8080"
-    private val client = OkHttpClient()
     private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
-    // Step A: Request Access Token from Gateway
+    private val certificatePinner = CertificatePinner.Builder()
+        // Pin SHA-256 public key hash for production gateway endpoints
+        .add("10.0.2.2", "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
+        .build()
+
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(5, TimeUnit.SECONDS)
+        .readTimeout(5, TimeUnit.SECONDS)
+        // Uncomment in production once SSL certs are bound:
+        // .certificatePinner(certificatePinner)
+        .build()
+
+    // Step A: Login Device to obtain JWT Access Token
     fun loginDevice(deviceId: String): String? {
-        val json = JSONObject().apply { put("deviceId", deviceId) }
+        val json = JSONObject().apply {
+            put("deviceId", deviceId)
+        }
         val body = json.toString().toRequestBody(JSON_MEDIA)
 
         val request = Request.Builder()
