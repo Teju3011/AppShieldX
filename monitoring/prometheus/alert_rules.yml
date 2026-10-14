@@ -1,0 +1,38 @@
+groups:
+  - name: security_framework_alerts
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Microservice {{ $labels.job }} is down"
+          description: "Instance {{ $labels.instance }} has been unreachable for more than 30 seconds."
+
+      - alert: HighRateLimitEnforcement
+        expr: rate(http_server_requests_seconds_count{status="429"}[1m]) > 10
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rate limiting threshold exceeded on API Gateway"
+          description: "API Gateway is actively rejecting requests due to rate limits exceeding normal thresholds."
+
+      - alert: HighUnauthorizedAccessRate
+        expr: rate(http_server_requests_seconds_count{status="401"}[1m]) > 5
+        for: 1m
+        labels:
+          severity: high
+        annotations:
+          summary: "Elevated 401 Unauthorized errors detected"
+          description: "Potential credential stuffing, brute force attack, or expired token flurry detected."
+
+      - alert: HighSecurityRiskForbidden
+        expr: rate(http_server_requests_seconds_count{status="403"}[1m]) > 3
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Zero-Trust policy violations or high device risk score blocks"
+          description: "Business Service or Gateway is rejecting requests due to compromised device risk score or RBAC violations."

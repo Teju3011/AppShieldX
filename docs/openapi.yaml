@@ -1,0 +1,788 @@
+openapi: 3.0.3
+info:
+  title: AppShieldX API - Cloud-Native Runtime Protection and API Security Framework
+  description: >
+    Production REST API specification for AppShieldX: A Cloud-Native Runtime Protection
+    and API Security Framework for Client–Server Android and iOS Applications.
+    Provides Zero-Trust API gateway defenses, real-time threat detection, mobile RASP telemetry ingestion,
+    identity/device management, and SOC administrative oversight.
+  version: 1.0.0
+  contact:
+    name: AppShieldX Security Engineering Team
+    url: https://github.com/framework/cloud-native-mobile-security-framework
+servers:
+  - url: http://localhost:8080
+    description: Local Spring Cloud Gateway Edge Proxy
+  - url: https://api.appshieldx.demo.internal
+    description: AWS Application Load Balancer HTTPS Gateway
+
+paths:
+  /api/v1/auth/register:
+    post:
+      summary: User Registration
+      description: Registers a new user account with default role ROLE_USER and hashed credentials.
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /api/v1/auth/login:
+    post:
+      summary: User Login & Token Issuance
+      description: Authenticates user credentials, applies brute-force rate-limiting, and issues JWT access token and refresh token.
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /api/v1/auth/refresh:
+    post:
+      summary: Refresh Access Token
+      description: Rotates refresh token and issues a fresh short-lived JWT access token.
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+                  description: Active refresh token
+      responses:
+        '200':
+          description: Token rotated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/auth/logout:
+    post:
+      summary: Logout & Session Invalidation
+      description: Revokes refresh token in database and blacklists access token in Redis cache.
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Session terminated successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/users/me:
+    get:
+      summary: Get Authenticated User Profile
+      description: Retrieves the profile and active roles of the authenticated caller.
+      tags:
+        - Users & Devices
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User profile details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+    patch:
+      summary: Update Authenticated User Profile
+      description: Updates editable profile fields for the authenticated caller.
+      tags:
+        - Users & Devices
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+      responses:
+        '200':
+          description: User profile updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/devices/register:
+    post:
+      summary: Register Client Device
+      description: Binds a mobile device identifier, platform, and initial posture state to the user account.
+      tags:
+        - Users & Devices
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceRegistrationRequest'
+      responses:
+        '201':
+          description: Device successfully registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceRecord'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/devices/me:
+    get:
+      summary: List Registered User Devices
+      description: Retrieves all active and registered mobile devices associated with the authenticated account.
+      tags:
+        - Users & Devices
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of registered devices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeviceRecord'
+
+  /api/v1/security/events:
+    post:
+      summary: Ingest Mobile Runtime Security Event
+      description: Ingests RASP telemetry (root, jailbreak, debugger, Frida, integrity tampering), calculates risk score, and persists event.
+      tags:
+        - Threat Detection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecurityEventRequest'
+      responses:
+        '202':
+          description: Security event ingested and evaluated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityEventResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /api/v1/security/events/me:
+    get:
+      summary: Query Recent User Security Events
+      description: Returns recent security events logged for the caller's registered devices.
+      tags:
+        - Threat Detection
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Recent security events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SecurityEventRecord'
+
+  /api/v1/resources:
+    get:
+      summary: List Business Resources
+      description: Fetches resources owned by the caller. Enforces Zero-Trust policy (HTTP 403 if device risk score >= 70).
+      tags:
+        - Business Service
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of owned business resources
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BusinessResource'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /api/v1/resources/{id}:
+    get:
+      summary: Get Single Business Resource
+      description: Retrieves specific resource. Validates ownership and blocks unauthorized access (Anti-IDOR).
+      tags:
+        - Business Service
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Resource details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessResource'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /api/v1/admin/overview:
+    get:
+      summary: SOC Overview & Threat Metrics
+      description: Aggregated telemetry for the Admin SOC dashboard (counts, severities, rate limit triggers).
+      tags:
+        - Administration
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: System overview statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminOverviewStats'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /api/v1/admin/events:
+    get:
+      summary: Query Security Events Feed
+      description: Filterable, paginated log of all runtime threat events across platforms.
+      tags:
+        - Administration
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        - name: platform
+          in: query
+          schema:
+            type: string
+            enum: [ANDROID, IOS]
+      responses:
+        '200':
+          description: Paginated security events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSecurityEvents'
+
+  /api/v1/admin/alerts:
+    get:
+      summary: List Active Threat Alerts
+      description: Active security alerts requiring SOC triage.
+      tags:
+        - Administration
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of alerts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ThreatAlert'
+
+  /api/v1/admin/alerts/{id}:
+    patch:
+      summary: Update Alert Status
+      description: Acknowledges or resolves a threat alert.
+      tags:
+        - Administration
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [ACKNOWLEDGED, RESOLVED, DISMISSED]
+      responses:
+        '200':
+          description: Alert updated successfully
+
+  /api/v1/admin/audit-logs:
+    get:
+      summary: Immutable Audit Log Trail
+      description: Read-only query of immutable security audit logs with X-Correlation-ID tracing.
+      tags:
+        - Administration
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of audit logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditLogRecord'
+
+  /api/v1/admin/threat-rules:
+    get:
+      summary: List Threat Detection Rules
+      description: Active deterministic threat rules and risk score weight configurations.
+      tags:
+        - Administration
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of active threat detection rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ThreatRule'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    BadRequestError:
+      description: Malformed payload or validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UnauthorizedError:
+      description: Missing, invalid, or expired JWT token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ForbiddenError:
+      description: Insufficient RBAC roles or Zero-Trust device risk block (Risk Score >= 70)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFoundError:
+      description: Requested resource was not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimitError:
+      description: Excessive requests exceeding sliding-window threshold (HTTP 429)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - email
+        - password
+      properties:
+        username:
+          type: string
+          example: sec_engineer
+        email:
+          type: string
+          format: email
+          example: engineer@appshieldx.io
+        password:
+          type: string
+          format: password
+          example: SecureAppShieldXPass2026!
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: admin@security.local
+        password:
+          type: string
+          format: password
+          example: AdminMasterPass2026!
+
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: Signed JWT access token (HS256)
+        refreshToken:
+          type: string
+          description: Secure refresh token
+        tokenType:
+          type: string
+          example: Bearer
+        expiresIn:
+          type: integer
+          example: 900
+        user:
+          $ref: '#/components/schemas/UserProfile'
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+        accountLocked:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+        message:
+          type: string
+
+    DeviceRegistrationRequest:
+      type: object
+      required:
+        - deviceId
+        - platform
+        - appVersion
+      properties:
+        deviceId:
+          type: string
+          example: android-hw-uuid-10492
+        platform:
+          type: string
+          enum: [ANDROID, IOS]
+        appVersion:
+          type: string
+          example: 1.0.0
+        model:
+          type: string
+          example: Pixel 8 Pro
+
+    DeviceRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        deviceId:
+          type: string
+        platform:
+          type: string
+        appVersion:
+          type: string
+        riskScore:
+          type: integer
+          example: 15
+        riskLevel:
+          type: string
+          example: LOW
+        lastSeen:
+          type: string
+          format: date-time
+
+    SecurityEventRequest:
+      type: object
+      required:
+        - eventType
+        - severity
+        - platform
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        platform:
+          type: string
+          enum: [ANDROID, IOS]
+        appVersion:
+          type: string
+        eventType:
+          type: string
+          example: FRIDA_DETECTED
+        severity:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        deviceReference:
+          type: string
+        userReference:
+          type: string
+        correlationId:
+          type: string
+        riskScore:
+          type: integer
+        detectionReason:
+          type: string
+        endpointCategory:
+          type: string
+        serverVerificationStatus:
+          type: string
+
+    SecurityEventResponse:
+      type: object
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          example: PROCESSED
+        assessedRiskScore:
+          type: integer
+          example: 85
+        assessedRiskLevel:
+          type: string
+          example: CRITICAL
+        actionEnforced:
+          type: string
+          example: SESSION_REVOKED
+
+    SecurityEventRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+        severity:
+          type: string
+        riskScore:
+          type: integer
+        detectionReason:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    BusinessResource:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        sensitivity:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    AdminOverviewStats:
+      type: object
+      properties:
+        totalRegisteredUsers:
+          type: integer
+        activeDevices:
+          type: integer
+        securityEventsTotal:
+          type: integer
+        criticalThreats:
+          type: integer
+        failedLogins24h:
+          type: integer
+        zeroTrustBlocks:
+          type: integer
+        systemStatus:
+          type: string
+
+    PaginatedSecurityEvents:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/SecurityEventRecord'
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        pageNumber:
+          type: integer
+
+    ThreatAlert:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        severity:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE, ACKNOWLEDGED, RESOLVED]
+        createdAt:
+          type: string
+          format: date-time
+
+    AuditLogRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        serviceName:
+          type: string
+        action:
+          type: string
+        status:
+          type: string
+        correlationId:
+          type: string
+        clientIp:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    ThreatRule:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        baseWeight:
+          type: integer
+        enabled:
+          type: boolean
+
+    ErrorResponse:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string
+        path:
+          type: string
+        correlationId:
+          type: string

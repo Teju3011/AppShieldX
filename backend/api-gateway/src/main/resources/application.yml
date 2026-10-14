@@ -1,0 +1,141 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:${REDIS_HOST:localhost}}
+      port: ${SPRING_DATA_REDIS_PORT:${REDIS_PORT:6379}}
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
+      timeout: 2000ms
+  cloud:
+    gateway:
+      default-filters:
+        - name: JwtAuthentication
+      routes:
+        # Route 1: Authentication Service (Public Login, Register, Refresh)
+        - id: auth-service-route
+          uri: ${AUTH_SERVICE_URL:http://auth-service:8081}
+          predicates:
+            - Path=/api/auth/**
+
+        # Route 1-v1: Authentication Service (v1 Contract)
+        - id: auth-service-v1-route
+          uri: ${AUTH_SERVICE_URL:http://auth-service:8081}
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - RewritePath=/api/v1/auth(?<segment>/?.*), /api/auth$\{segment}
+
+        # Route 2: User Service (Profiles & Self Management)
+        - id: user-service-route
+          uri: ${USER_SERVICE_URL:http://user-service:8082}
+          predicates:
+            - Path=/api/users/**
+
+        # Route 2-v1: User Service (v1 Contract)
+        - id: user-service-v1-route
+          uri: ${USER_SERVICE_URL:http://user-service:8082}
+          predicates:
+            - Path=/api/v1/users/**
+          filters:
+            - RewritePath=/api/v1/users(?<segment>/?.*), /api/users$\{segment}
+
+        # Route 2-v1-devices: Device Registration (v1 Contract)
+        - id: device-service-v1-route
+          uri: ${USER_SERVICE_URL:http://user-service:8082}
+          predicates:
+            - Path=/api/v1/devices/**
+          filters:
+            - RewritePath=/api/v1/devices(?<segment>/?.*), /api/users/devices$\{segment}
+
+        # Route 3: Business Reference Service (Protected Business Domain)
+        - id: business-service-route
+          uri: ${BUSINESS_SERVICE_URL:http://business-service:8083}
+          predicates:
+            - Path=/api/business/**
+
+        # Route 3-v1: Business Resources (v1 Contract)
+        - id: resources-service-v1-route
+          uri: ${BUSINESS_SERVICE_URL:http://business-service:8083}
+          predicates:
+            - Path=/api/v1/resources/**
+          filters:
+            - RewritePath=/api/v1/resources(?<segment>/?.*), /api/business/records$\{segment}
+
+        # Route 4: Threat Detection Service (Telemetry Ingestion & Risk Status)
+        - id: threat-detection-route
+          uri: ${THREAT_SERVICE_URL:${THREAT_DETECTION_URL:http://threat-detection-service:8084}}
+          predicates:
+            - Path=/api/security/**
+
+        # Route 4-v1: Security Events Telemetry (v1 Contract)
+        - id: threat-detection-v1-route
+          uri: ${THREAT_SERVICE_URL:${THREAT_DETECTION_URL:http://threat-detection-service:8084}}
+          predicates:
+            - Path=/api/v1/security/**
+          filters:
+            - RewritePath=/api/v1/security(?<segment>/?.*), /api/security$\{segment}
+
+        # Route 5: Administrative Management Route (Restricted to ROLE_ADMIN)
+        - id: admin-service-route
+          uri: ${USER_SERVICE_URL:http://user-service:8082}
+          predicates:
+            - Path=/api/admin/**
+          filters:
+            - name: JwtAuthentication
+              args:
+                requireAdmin: true
+
+        # Route 5-v1: Administrative Management (v1 Contract)
+        - id: admin-service-v1-route
+          uri: ${USER_SERVICE_URL:http://user-service:8082}
+          predicates:
+            - Path=/api/v1/admin/**
+          filters:
+            - name: JwtAuthentication
+              args:
+                requireAdmin: true
+            - RewritePath=/api/v1/admin(?<segment>/?.*), /api/admin$\{segment}
+
+        # Route 6: Audit Logging Service (Immutable Audit Trail)
+        - id: audit-service-route
+          uri: ${AUDIT_SERVICE_URL:http://audit-logging-service:8085}
+          predicates:
+            - Path=/api/audit/**
+
+        # Route 6-v1: Audit Logging Service (v1 Contract)
+        - id: audit-service-v1-route
+          uri: ${AUDIT_SERVICE_URL:http://audit-logging-service:8085}
+          predicates:
+            - Path=/api/v1/audit/**
+          filters:
+            - RewritePath=/api/v1/audit(?<segment>/?.*), /api/audit$\{segment}
+
+# Custom Security Framework Properties
+security:
+  jwt:
+    secret: ${JWT_SECRET:c2VjdXJlUmFzcEZyYW1ld29ya1N1cGVyU2VjcmV0S2V5MjAyNlZlcnlMb25nU3RyaW5nRm9ySFMyNTY=}
+  rate-limit:
+    login-per-minute: ${RATE_LIMIT_LOGIN:10}
+    api-per-minute: ${RATE_LIMIT_API:100}
+    security-events-per-minute: ${RATE_LIMIT_SECURITY_EVENTS:50}
+  cors:
+    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173}
+
+# Actuator & Prometheus Metrics Exporter
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}

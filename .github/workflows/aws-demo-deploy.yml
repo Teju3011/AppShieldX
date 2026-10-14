@@ -1,0 +1,158 @@
+name: AppShieldX AWS Demo Deployment & DevSecOps Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_profile:
+        description: 'Deployment Profile'
+        required: true
+        default: 'demo_lite'
+        type: choice
+        options:
+          - demo_lite
+          - full_cloud
+      aws_region:
+        description: 'Target AWS Region'
+        required: true
+        default: 'ap-south-1'
+
+permissions:
+  id-token: write   # Required for AWS OIDC federation
+  contents: read
+  security-events: write
+
+jobs:
+  validate-and-security-scan:
+    name: DevSecOps Linting & Security Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Gitleaks Secret Audit
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Semgrep SAST Security Scan
+        run: |
+          pip install semgrep
+          semgrep scan --config auto --error --exclude 'test/*'
+
+      - name: Trivy Filesystem Dependency Scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          ignore-unfixed: true
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Security SARIF Report
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  backend-test:
+    name: Microservices Unit & Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java 21 LTS
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run Maven Tests Across Reactor
+        working-directory: backend
+        run: mvn clean test -B
+
+      - name: Archive Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-backend-reports
+          path: 'backend/*/target/surefire-reports/'
+
+  mobile-and-dashboard-build:
+    name: Mobile & Dashboard Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter 3.24
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.3'
+          channel: 'stable'
+
+      - name: Execute Flutter Tests
+        working-directory: mobile
+        run: flutter test
+
+      - name: Setup Node.js 20+
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: admin-dashboard/package.json
+
+      - name: Build Admin Dashboard
+        working-directory: admin-dashboard
+        run: |
+          npm ci
+          npm run build
+
+  deploy-to-aws:
+    name: AWS OIDC Deployment & Health Verification
+    needs: [validate-and-security-scan, backend-test, mobile-and-dashboard-build]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ github.event.inputs.aws_region || 'ap-south-1' }}
+          role-session-name: AppShieldXDeploymentSession
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and Push Docker Images
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker build -t $REGISTRY/appshieldx/api-gateway:latest backend/api-gateway
+          docker push $REGISTRY/appshieldx/api-gateway:latest
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.5
+
+      - name: Terraform Apply
+        working-directory: infrastructure/terraform
+        run: |
+          terraform init
+          terraform apply -auto-approve \
+            -var="deployment_profile=${{ github.event.inputs.deployment_profile || 'demo_lite' }}" \
+            -var="aws_region=${{ github.event.inputs.aws_region || 'ap-south-1' }}"
+
+      - name: Verify Live ALB Health Endpoint
+        working-directory: infrastructure/terraform
+        run: |
+          ALB_DNS=$(terraform output -raw alb_dns_name)
+          echo "Probing ALB Endpoint: http://$ALB_DNS/actuator/health"
+          curl --fail --retry 5 --retry-delay 10 "http://$ALB_DNS/actuator/health"

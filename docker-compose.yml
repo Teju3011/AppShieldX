@@ -1,0 +1,307 @@
+services:
+  # ============================================================================
+  # Infrastructure Services
+  # ============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: security-framework-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: security_framework_db
+      POSTGRES_USER: postgres_admin
+      POSTGRES_PASSWORD: SecuritySuperSecretPassword123!
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - ./database/migrations/V1__init_schema.sql:/docker-entrypoint-initdb.d/02_schema.sql:ro
+      - ./database/migrations/V2__seed_initial_data.sql:/docker-entrypoint-initdb.d/03_seed.sql:ro
+      - ./database/migrations/V3__cross_layer_correlation_schema.sql:/docker-entrypoint-initdb.d/04_correlation.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres_admin -d security_framework_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - security-network
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: security-framework-redis
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "RedisStrongFrameworkPassword2026!", "--maxmemory", "256mb", "--maxmemory-policy", "volatile-lru"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./redis/scripts:/usr/local/share/redis/scripts:ro
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "RedisStrongFrameworkPassword2026!", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - security-network
+
+  # ============================================================================
+  # Microservices Backend
+  # ============================================================================
+  api-gateway:
+    build:
+      context: ./backend/api-gateway
+      dockerfile: Dockerfile
+    container_name: security-framework-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SERVER_PORT: 8080
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: RedisStrongFrameworkPassword2026!
+      JWT_SECRET: c2VjdXJlUmFzcEZyYW1ld29ya1N1cGVyU2VjcmV0S2V5MjAyNlZlcnlMb25nU3RyaW5nRm9ySFMyNTY=
+      AUTH_SERVICE_URL: http://auth-service:8081
+      USER_SERVICE_URL: http://user-service:8082
+      BUSINESS_SERVICE_URL: http://business-service:8083
+      THREAT_SERVICE_URL: http://threat-detection-service:8084
+      AUDIT_SERVICE_URL: http://audit-logging-service:8085
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    networks:
+      - security-network
+
+  auth-service:
+    build:
+      context: ./backend/auth-service
+      dockerfile: Dockerfile
+    container_name: security-framework-auth
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      SERVER_PORT: 8081
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/security_framework_db
+      SPRING_DATASOURCE_USERNAME: postgres_admin
+      SPRING_DATASOURCE_PASSWORD: SecuritySuperSecretPassword123!
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: RedisStrongFrameworkPassword2026!
+      JWT_SECRET: c2VjdXJlUmFzcEZyYW1ld29ya1N1cGVyU2VjcmV0S2V5MjAyNlZlcnlMb25nU3RyaW5nRm9ySFMyNTY=
+      JWT_ACCESS_EXPIRATION_MS: 900000
+      JWT_REFRESH_EXPIRATION_MS: 604800000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - security-network
+
+  user-service:
+    build:
+      context: ./backend/user-service
+      dockerfile: Dockerfile
+    container_name: security-framework-user
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      SERVER_PORT: 8082
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/security_framework_db
+      SPRING_DATASOURCE_USERNAME: postgres_admin
+      SPRING_DATASOURCE_PASSWORD: SecuritySuperSecretPassword123!
+      JWT_SECRET: c2VjdXJlUmFzcEZyYW1ld29ya1N1cGVyU2VjcmV0S2V5MjAyNlZlcnlMb25nU3RyaW5nRm9ySFMyNTY=
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - security-network
+
+  business-service:
+    build:
+      context: ./backend/business-service
+      dockerfile: Dockerfile
+    container_name: security-framework-business
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    environment:
+      SERVER_PORT: 8083
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/security_framework_db
+      SPRING_DATASOURCE_USERNAME: postgres_admin
+      SPRING_DATASOURCE_PASSWORD: SecuritySuperSecretPassword123!
+      JWT_SECRET: c2VjdXJlUmFzcEZyYW1ld29ya1N1cGVyU2VjcmV0S2V5MjAyNlZlcnlMb25nU3RyaW5nRm9ySFMyNTY=
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - security-network
+
+  threat-detection-service:
+    build:
+      context: ./backend/threat-detection-service
+      dockerfile: Dockerfile
+    container_name: security-framework-threat
+    restart: unless-stopped
+    ports:
+      - "8084:8084"
+    environment:
+      SERVER_PORT: 8084
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/security_framework_db
+      SPRING_DATASOURCE_USERNAME: postgres_admin
+      SPRING_DATASOURCE_PASSWORD: SecuritySuperSecretPassword123!
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: RedisStrongFrameworkPassword2026!
+      JWT_SECRET: c2VjdXJlUmFzcEZyYW1ld29ya1N1cGVyU2VjcmV0S2V5MjAyNlZlcnlMb25nU3RyaW5nRm9ySFMyNTY=
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - security-network
+
+  audit-logging-service:
+    build:
+      context: ./backend/audit-logging-service
+      dockerfile: Dockerfile
+    container_name: security-framework-audit
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    environment:
+      SERVER_PORT: 8085
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/security_framework_db
+      SPRING_DATASOURCE_USERNAME: postgres_admin
+      SPRING_DATASOURCE_PASSWORD: SecuritySuperSecretPassword123!
+      JWT_SECRET: c2VjdXJlUmFzcEZyYW1ld29ya1N1cGVyU2VjcmV0S2V5MjAyNlZlcnlMb25nU3RyaW5nRm9ySFMyNTY=
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - security-network
+
+  # ============================================================================
+  # Frontend Admin Dashboard
+  # ============================================================================
+  admin-dashboard:
+    build:
+      context: ./admin-dashboard
+      dockerfile: Dockerfile
+    container_name: security-framework-admin-ui
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - api-gateway
+    networks:
+      - security-network
+
+  # ============================================================================
+  # Observability & Monitoring: Prometheus & Grafana
+  # ============================================================================
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: security-framework-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - security-network
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: security-framework-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=AdminSecurityGrafana2026!
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - security-network
+
+  # ============================================================================
+  # SIEM & Log Aggregation: Elasticsearch, Logstash, Kibana (ELK)
+  # ============================================================================
+  elasticsearch:
+    image: elasticsearch:8.13.0
+    container_name: security-framework-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - security-network
+
+  logstash:
+    image: logstash:8.13.0
+    container_name: security-framework-logstash
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/elk/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+    environment:
+      - "LS_JAVA_OPTS=-Xms256m -Xmx256m"
+    ports:
+      - "5044:5044"
+    depends_on:
+      - elasticsearch
+    networks:
+      - security-network
+
+  kibana:
+    image: kibana:8.13.0
+    container_name: security-framework-kibana
+    restart: unless-stopped
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - security-network
+
+networks:
+  security-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  elasticsearch_data:
+    driver: local

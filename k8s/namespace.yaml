@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: security-framework
+  labels:
+    name: security-framework
+    tier: enterprise-defense

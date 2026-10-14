@@ -1,0 +1,17 @@
+aws_region         = "ap-south-1"
+environment        = "demo"
+project_name       = "AppShieldX"
+deployment_profile = "demo_lite"  # Change to "full_cloud" for multi-AZ RDS and managed ElastiCache
+app_version        = "1.0.0"
+
+# Networking
+vpc_cidr           = "10.0.0.0/16"
+
+# Database & Secrets
+db_username        = "postgres_admin"
+db_password        = "SecuritySuperSecretPassword123!"
+jwt_secret         = "c2VjdXJlUmFzcEZyYW1ld29ya1N1cGVyU2VjcmV0S2V5MjAyNlZlcnlMb25nU3RyaW5nRm9ySFMyNTY="
+
+# Notifications
+alert_email        = "security-alerts@appshieldx.io"
+enable_waf         = false

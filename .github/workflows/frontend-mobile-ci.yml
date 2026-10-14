@@ -1,0 +1,65 @@
+name: Frontend & Mobile CI
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'admin-dashboard/**'
+      - 'mobile/**'
+      - '.github/workflows/frontend-mobile-ci.yml'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'admin-dashboard/**'
+      - 'mobile/**'
+
+jobs:
+  admin-dashboard:
+    name: Build Admin Dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'admin-dashboard/package.json'
+
+      - name: Install Dependencies
+        working-directory: admin-dashboard
+        run: npm install
+
+      - name: TypeScript Check & Vite Build
+        working-directory: admin-dashboard
+        run: npm run build
+
+  mobile-flutter:
+    name: Analyze Mobile Flutter App
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17 (for Android toolchain)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.x'
+          channel: 'stable'
+          cache: true
+
+      - name: Install Flutter Dependencies
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Run Flutter Tests
+        working-directory: mobile
+        run: flutter test

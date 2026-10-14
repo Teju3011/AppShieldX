@@ -1,0 +1,58 @@
+{
+  "CONFIG_A_API_ONLY": {
+    "configuration": "CONFIG_A_API_ONLY",
+    "total_evaluations": 100,
+    "true_positives": 10,
+    "false_positives": 0,
+    "true_negatives": 30,
+    "false_negatives": 60,
+    "recall": 0.1429,
+    "precision": 1.0,
+    "false_positive_rate": 0.0,
+    "f1_score": 0.25,
+    "median_latency_ms": 3.51,
+    "p95_latency_ms": 4.19
+  },
+  "CONFIG_B_MOBILE_ONLY": {
+    "configuration": "CONFIG_B_MOBILE_ONLY",
+    "total_evaluations": 100,
+    "true_positives": 10,
+    "false_positives": 0,
+    "true_negatives": 30,
+    "false_negatives": 60,
+    "recall": 0.1429,
+    "precision": 1.0,
+    "false_positive_rate": 0.0,
+    "f1_score": 0.25,
+    "median_latency_ms": 3.98,
+    "p95_latency_ms": 4.87
+  },
+  "CONFIG_C_INDEPENDENT": {
+    "configuration": "CONFIG_C_INDEPENDENT",
+    "total_evaluations": 100,
+    "true_positives": 40,
+    "false_positives": 0,
+    "true_negatives": 30,
+    "false_negatives": 30,
+    "recall": 0.5714,
+    "precision": 1.0,
+    "false_positive_rate": 0.0,
+    "f1_score": 0.7273,
+    "median_latency_ms": 3.89,
+    "p95_latency_ms": 4.81
+  },
+  "CONFIG_D_FULL_APPSHIELDX": {
+    "configuration": "CONFIG_D_FULL_APPSHIELDX",
+    "total_evaluations": 100,
+    "true_positives": 60,
+    "false_positives": 0,
+    "true_negatives": 30,
+    "false_negatives": 10,
+    "recall": 0.8571,
+    "precision": 1.0,
+    "false_positive_rate": 0.0,
+    "f1_score": 0.9231,
+    "median_latency_ms": 3.76,
+    "p95_latency_ms": 4.71
+  }
+}

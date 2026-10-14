@@ -1,0 +1,6 @@
+cluster.name: "security-framework-siem"
+network.host: 0.0.0.0
+discovery.type: single-node
+xpack.security.enabled: false
+xpack.security.enrollment.enabled: false
+indices.query.bool.max_clause_count: 8192
