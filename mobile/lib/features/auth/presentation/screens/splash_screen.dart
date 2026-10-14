@@ -40,23 +40,24 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(24),
+              width: 140,
+              height: 140,
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: AppTheme.cardDark,
                 shape: BoxShape.circle,
                 border: Border.all(color: AppTheme.accentCyan, width: 2),
                 boxShadow: [
                   BoxShadow(
-                    color: AppTheme.accentCyan.withOpacity(0.3),
-                    blurRadius: 24,
-                    spreadRadius: 4,
+                    color: AppTheme.accentCyan.withOpacity(0.35),
+                    blurRadius: 28,
+                    spreadRadius: 6,
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.shield_outlined,
-                size: 72,
-                color: AppTheme.accentCyan,
+              child: Image.asset(
+                'assets/images/app_logo_shield_transparent.png',
+                fit: BoxFit.contain,
               ),
             ),
             const SizedBox(height: 32),

@@ -12,7 +12,12 @@ export const Navbar: React.FC = () => {
     <AppBar position="sticky" elevation={0} sx={{ borderBottom: '1px solid #1E293B', bgcolor: '#0D1424' }}>
       <Toolbar sx={{ justifyContent: 'space-between' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <ShieldIcon sx={{ color: '#00E5FF', fontSize: 30 }} />
+          <Box
+            component="img"
+            src="/appshieldx_logo.png"
+            alt="AppShieldX Logo"
+            sx={{ height: 36, width: 36, objectFit: 'contain' }}
+          />
           <Box>
             <Typography variant="h6" sx={{ fontWeight: 800, letterSpacing: -0.5, color: '#F8FAFC', lineHeight: 1.2 }}>
               APPSHIELD<span style={{ color: '#00E5FF' }}>X</span>
