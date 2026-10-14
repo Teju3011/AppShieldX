@@ -50,17 +50,18 @@ def emit_gateway_decision(decision="ALLOW", risk_score=12, latency_ms=4.2, viola
         _send_log_event("/aws/appshieldx/gateway-decisions", payload)
 
         # Also send threat event if blocked or suspicious
+        is_frida = "FRIDA" in (violation or "")
         threat_payload = {
             "timestamp": now_utc,
-            "eventType": "USB_DEBUGGING_ATTACHED" if violation else "DEVICE_INTEGRITY_SCAN",
+            "eventType": "FRIDA_HOOK_INJECTION_ATTEMPT" if is_frida else ("USB_DEBUGGING_ATTACHED" if violation else "DEVICE_INTEGRITY_SCAN"),
             "deviceId": "motorola-edge-50-fusion",
             "indicators": {
-                "usbDebuggingAdb": bool(violation),
+                "usbDebuggingAdb": bool(violation and not is_frida),
                 "rootIntegrity": False,
-                "fridaMemoryHook": False
+                "fridaMemoryHook": is_frida
             },
             "compositeRiskScore": risk_score,
-            "riskBand": "RESTRICTED" if risk_score > 50 else "NOMINAL"
+            "riskBand": "CRITICAL" if risk_score >= 90 else ("RESTRICTED" if risk_score > 50 else "NOMINAL")
         }
         _send_log_event("/aws/appshieldx/threat-events", threat_payload)
         print(f"[AWS CloudWatch Live] Emitted {decision} (Risk: {risk_score}) to ap-south-1")

@@ -486,8 +486,9 @@ class GrafanaHandler(BaseHTTPRequestHandler):
             <span class="live">● LIVE 5s</span>
         </div>
         <div class="controls">
-            <button class="btn btn-danger" onclick="injectThreat()">⚡ Trigger USB Debug Attack</button>
-            <button class="btn" style="background:#10b981; border-color:#059669; color:#fff;" onclick="commitSafeTransfer()">🔒 Commit Keystore Transfer</button>
+            <button class="btn btn-danger" style="background:#dc2626; font-weight:bold;" onclick="injectThreat('FRIDA')">💉 Simulate Frida Hook Attack</button>
+            <button class="btn" style="background:#d97706; border-color:#b45309; color:#fff; font-weight:bold;" onclick="injectThreat('DEBUGGER')">⚡ Attach ADB Debugger</button>
+            <button class="btn" style="background:#10b981; border-color:#059669; color:#fff; font-weight:bold;" onclick="commitSafeTransfer()">🔒 Commit Keystore Transfer</button>
             <a class="btn" style="background:#ff9900; border-color:#d97706; color:#111; font-weight:700;" href="https://ap-south-1.console.aws.amazon.com/cloudwatch/home?region=ap-south-1#dashboards:name=AppShieldX-Executive-SOC" target="_blank">☁️ AWS CloudWatch SOC &rarr;</a>
             <a class="btn" href="http://localhost:5173" target="_blank">Open SOC Admin (5173) &rarr;</a>
             <a class="btn" href="http://localhost:8088" target="_blank">Open Mobile App (8088) &rarr;</a>
@@ -582,18 +583,30 @@ class GrafanaHandler(BaseHTTPRequestHandler):
             options: { responsive: true, plugins: { legend: { labels: { color: '#8e99a8' } } }, scales: { y: { min: 0, max: 100, grid: { color: '#262a33' } }, x: { grid: { color: '#262a33' } } } }
         });
 
-        function injectThreat() {
+        function injectThreat(threatType) {
+            const isFrida = threatType === 'FRIDA';
+            const risk = isFrida ? 95 : 85;
+            const label = isFrida ? 'Frida Dynamic Hook (Memory Swizzling)' : 'USB Debugging (ADB Attached)';
             trafficChart.data.datasets[1].data[5] += 15;
             trafficChart.update();
-            riskChart.data.datasets[0].data[5] = 85;
+            riskChart.data.datasets[0].data[5] = risk;
             riskChart.update();
             const tr = document.createElement('tr');
-            tr.innerHTML = '<td>Just now</td><td>/api/v1/banking/transfers</td><td>11.12.9.189</td><td>USB Debugging (ADB Attached)</td><td><span class="tag-block">HTTP 403 RESTRICT_SENSITIVE_ACTIONS</span></td><td>4.8 ms</td>';
+            tr.innerHTML = '<td>Just now</td><td>/api/v1/banking/transfers</td><td>11.12.9.189</td><td>' + label + '</td><td><span class="tag-block">HTTP 403 RESTRICT_SENSITIVE_ACTIONS</span></td><td>4.8 ms</td>';
             document.getElementById('logBody').prepend(tr);
-            fetch('http://localhost:8080/api/v1/banking/transfers', {
+            fetch('http://127.0.0.1:8080/api/v1/banking/transfers', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-AppShieldX-Debugger': 'true' },
-                body: JSON.stringify({ debuggerActive: true, amount: 5000.0 })
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-AppShieldX-Debugger': isFrida ? 'false' : 'true',
+                    'X-AppShieldX-Frida': isFrida ? 'true' : 'false'
+                },
+                body: JSON.stringify({
+                    debuggerActive: !isFrida,
+                    fridaActive: isFrida,
+                    amount: 5000.0,
+                    attackType: threatType
+                })
             }).catch(e => console.log('Simulated attack emitted to Gateway:', e));
         }
 
@@ -605,7 +618,7 @@ class GrafanaHandler(BaseHTTPRequestHandler):
             const tr = document.createElement('tr');
             tr.innerHTML = '<td>Just now</td><td>/api/v1/banking/transfers</td><td>11.12.9.189</td><td>Clean (Hardware Keystore Attested)</td><td><span class="tag-allow">HTTP 200 ALLOW</span></td><td>4.1 ms</td>';
             document.getElementById('logBody').prepend(tr);
-            fetch('http://localhost:8080/api/v1/banking/transfers', {
+            fetch('http://127.0.0.1:8080/api/v1/banking/transfers', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ debuggerActive: false, amount: 2500.0 })
@@ -688,9 +701,37 @@ http_server_requests_seconds_count{status="403"} 184
                 self.headers.get("X-AppShieldX-Debugger", "false").lower() == "true"
                 or data.get("debuggerActive", False)
             )
+            is_frida = (
+                self.headers.get("X-AppShieldX-Frida", "false").lower() == "true"
+                or data.get("fridaActive", False)
+                or data.get("attackType") == "FRIDA"
+            )
             amount = data.get("amount", 5000.0)
 
-            if is_debugger:
+            if is_frida:
+                emit_gateway_decision(
+                    decision="RESTRICT_SENSITIVE_ACTIONS",
+                    risk_score=95,
+                    latency_ms=4.6,
+                    violation="FRIDA_DYNAMIC_HOOK_INJECTION_ACTIVE",
+                    commercial_comparison="Legacy banking apps trust token blindly; AppShieldX Zero-Trust PEP detects mid-session Frida hook and hard-blocks HTTP 403"
+                )
+                self.send_response(403)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                res = {
+                    "status": 403,
+                    "error": "SECURITY_POLICY_VIOLATION",
+                    "policyDecision": "RESTRICT_SENSITIVE_ACTIONS",
+                    "violation": "FRIDA_DYNAMIC_INSTRUMENTATION_DETECTED",
+                    "message": "Frida runtime memory swizzling / hook detected. Sensitive transfer hard-blocked (Zero-Trust PEP).",
+                    "commercialComparison": "Perimeter security models trust token blindly; AppShieldX enforces continuous integrity verification",
+                    "riskScore": 95,
+                    "bypassable": False,
+                    "cloudWatchLogGroup": "/aws/appshieldx/gateway-decisions"
+                }
+                self.wfile.write(json.dumps(res).encode("utf-8"))
+            elif is_debugger:
                 emit_gateway_decision(
                     decision="RESTRICT_SENSITIVE_ACTIONS",
                     risk_score=85,
