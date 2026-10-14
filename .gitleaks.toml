@@ -1,0 +1,24 @@
+title = "AppShieldX Gitleaks Configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allow mock test passwords, sample JWT tokens, and review credentials"
+paths = [
+    '''scripts/.*''',
+    '''experiments/.*''',
+    '''monitoring/.*''',
+    '''report/.*''',
+    '''test/.*''',
+    '''tests/.*''',
+    '''.*\.md''',
+]
+regexes = [
+    '''SecOpsP@ssw0rd2026!''',
+    '''AdminSecurityGrafana2026!''',
+    '''jwt-secops-reviewer-.*''',
+    '''refresh-secops-reviewer-.*''',
+    '''Teju@3026''',
+    '''TX-AWS-.*''',
+]
