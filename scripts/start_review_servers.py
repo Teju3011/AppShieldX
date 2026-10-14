@@ -792,6 +792,33 @@ class ThreatServiceHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         super().end_headers()
 
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.end_headers()
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length) if length > 0 else b"{}"
+        try:
+            data = json.loads(body.decode("utf-8"))
+        except Exception:
+            data = {}
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        threats = data.get("threatTypes", [])
+        is_compromised = len(threats) > 0 or data.get("isCompromised", False)
+        res = {
+            "status": "PROCESSED",
+            "service": "threat-detection-service",
+            "correlationId": f"corr-{int(time.time())}",
+            "deviceRiskScore": 95 if is_compromised else 12,
+            "policyAction": "RESTRICT_SENSITIVE_ACTIONS" if is_compromised else "ALLOW",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        self.wfile.write(json.dumps(res).encode("utf-8"))
+
     def do_GET(self):
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
